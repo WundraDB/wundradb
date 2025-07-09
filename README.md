@@ -18,7 +18,7 @@ cargo build --release --workspace
 ```
 
 #### From GitHub Releases
-Download pre-built binaries from: [GitHub Releases](https://github.com/your-org/wundradb/releases)
+Download pre-built binaries from: [GitHub Releases](https://github.com/WundraDB/wundradb/releases)
 
 Available binaries:
 - `wundradb-server` - Database server
