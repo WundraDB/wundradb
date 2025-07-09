@@ -1,6 +1,20 @@
 # WundraDB
 
+*Empowering Data Innovation at Lightning Speed*
+
 WundraDB is a distributed SQL database built in Rust with B+Tree storage, Write-Ahead Logging (WAL), and TCP-based client-server architecture.
+
+![Last Commit](https://img.shields.io/github/last-commit/WundraDB/wundradb?style=flat&logo=git&logoColor=white&color=0080ff)
+![Top Language](https://img.shields.io/github/languages/top/WundraDB/wundradb?style=flat&color=0080ff)
+![Language Count](https://img.shields.io/github/languages/count/WundraDB/wundradb?style=flat&color=0080ff)
+
+---
+
+### 🚀 Built With
+
+![Rust](https://img.shields.io/badge/Rust-000000.svg?style=flat&logo=Rust&logoColor=white)
+![Tokio](https://img.shields.io/badge/Tokio-000000.svg?style=flat&logo=Rust&logoColor=white)
+![Serde](https://img.shields.io/badge/Serde-000000.svg?style=flat&logo=Rust&logoColor=white)
 
 ## 🔧 Setup Instructions
 
