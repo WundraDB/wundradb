@@ -1,9 +1,8 @@
 use crate::sql::engine::{Row, TableSchema};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use std::io::SeekFrom;
 use tokio::fs::OpenOptions;
-use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt, BufReader};
+use tokio::io::{AsyncReadExt, AsyncWriteExt, BufReader};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -31,7 +30,7 @@ pub struct WriteAheadLog {
 
 impl WriteAheadLog {
     pub async fn new(path: &str) -> Result<Self> {
-        let mut wal = Self {
+        let wal = Self {
             path: path.to_string(),
             entries: Vec::new(),
         };
@@ -123,7 +122,7 @@ impl WriteAheadLog {
 
     pub async fn truncate(&mut self) -> Result<()> {
         // Clear WAL file (used after successful checkpoint)
-        let mut file = OpenOptions::new()
+        let file = OpenOptions::new()
             .write(true)
             .truncate(true)
             .open(&self.path)
@@ -335,4 +334,92 @@ mod tests {
         let entry = WalEntry {
             id: Uuid::new_v4(),
             timestamp: chrono::Utc::now(),
-            operation: WalOperation::Insert
+            operation: WalOperation::Insert {
+                table: "users".to_string(),
+                key: "users:1".to_string(),
+                row: Row { values: row_values },
+            },
+        };
+        
+        wal.append(&entry).await.unwrap();
+        
+        // Test sync
+        let result = wal.sync().await;
+        assert!(result.is_ok());
+        
+        // Test checkpoint
+        let result = wal.checkpoint().await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_wal_truncate() {
+        let temp_file = NamedTempFile::new().unwrap();
+        let wal_path = temp_file.path().to_str().unwrap();
+        
+        let mut wal = WriteAheadLog::new(wal_path).await.unwrap();
+        
+        // Add some entries
+        let mut row_values = HashMap::new();
+        row_values.insert("id".to_string(), SqlValue::Integer(1));
+        
+        let entry = WalEntry {
+            id: Uuid::new_v4(),
+            timestamp: chrono::Utc::now(),
+            operation: WalOperation::Insert {
+                table: "users".to_string(),
+                key: "users:1".to_string(),
+                row: Row { values: row_values },
+            },
+        };
+        
+        wal.append(&entry).await.unwrap();
+        assert_eq!(wal.entry_count(), 1);
+        
+        // Truncate
+        wal.truncate().await.unwrap();
+        assert_eq!(wal.entry_count(), 0);
+        
+        // Verify file is empty
+        let metadata = tokio::fs::metadata(&wal.path).await.unwrap();
+        assert_eq!(metadata.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_wal_filter_methods() {
+        let temp_file = NamedTempFile::new().unwrap();
+        let wal_path = temp_file.path().to_str().unwrap();
+        
+        let mut wal = WriteAheadLog::new(wal_path).await.unwrap();
+        let now = chrono::Utc::now();
+        
+        // Add entries for different tables
+        for (table, i) in [("users", 1), ("products", 2), ("users", 3)] {
+            let mut row_values = HashMap::new();
+            row_values.insert("id".to_string(), SqlValue::Integer(i));
+            
+            let entry = WalEntry {
+                id: Uuid::new_v4(),
+                timestamp: now + chrono::Duration::seconds(i),
+                operation: WalOperation::Insert {
+                    table: table.to_string(),
+                    key: format!("{}:{}", table, i),
+                    row: Row { values: row_values },
+                },
+            };
+            
+            wal.append(&entry).await.unwrap();
+        }
+        
+        // Test filter by table
+        let user_entries = wal.get_entries_for_table("users").await;
+        assert_eq!(user_entries.len(), 2);
+        
+        let product_entries = wal.get_entries_for_table("products").await;
+        assert_eq!(product_entries.len(), 1);
+        
+        // Test filter by time
+        let since_entries = wal.get_entries_since(now + chrono::Duration::seconds(2)).await;
+        assert_eq!(since_entries.len(), 1);
+    }
+}

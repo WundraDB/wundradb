@@ -206,8 +206,8 @@ impl SqlEngine {
     }
 
     async fn execute_select(&self, query: &Query) -> Result<String> {
-        match &query.body {
-            SetExpr::Select(select) => {
+        match *query.body {
+            SetExpr::Select(ref select) => {
                 // Extract table name
                 let table_name = match &select.from.first() {
                     Some(table) => match &table.relation {
@@ -243,13 +243,13 @@ impl SqlEngine {
                 }
 
                 // Apply ORDER BY if present
-                if let Some(order_by) = &query.order_by {
-                    rows = self.sort_rows(rows, order_by)?;
+                if !query.order_by.is_empty() {
+                    rows = self.sort_rows(rows, &query.order_by)?;
                 }
 
                 // Apply LIMIT if present
                 if let Some(limit) = &query.limit {
-                    if let Expr::Value(Value::Number(n, _)) = &limit {
+                    if let Expr::Value(Value::Number(ref n, _)) = &limit {
                         let limit_count = n.parse::<usize>().unwrap_or(usize::MAX);
                         rows.truncate(limit_count);
                     }
@@ -263,8 +263,8 @@ impl SqlEngine {
     }
 
     fn extract_insert_values(&self, query: &Query) -> Result<Vec<Vec<Value>>> {
-        match &query.body {
-            SetExpr::Values(values) => {
+        match *query.body {
+            SetExpr::Values(ref values) => {
                 let mut result = Vec::new();
                 for row in &values.rows {
                     let mut value_row = Vec::new();
@@ -285,11 +285,32 @@ impl SqlEngine {
     fn convert_data_type(&self, data_type: &DataType) -> Result<SqlDataType> {
         match data_type {
             DataType::Int(_) | DataType::Integer(_) => Ok(SqlDataType::Integer),
-            DataType::Varchar(len) => Ok(SqlDataType::Varchar(len.unwrap_or(255))),
-            DataType::Decimal(precision, scale) => Ok(SqlDataType::Decimal(
-                precision.unwrap_or(10),
-                scale.unwrap_or(2),
-            )),
+            DataType::Varchar(len) => {
+                // len is Option<CharacterLength>
+                let length = match len {
+                    Some(cl) => {
+                        // Use debug string to match variant
+                        let s = format!("{:?}", cl);
+                        if s.starts_with("Bounded") {
+                            // Extract number from Bounded(n)
+                            let start = s.find('(').unwrap_or(0) + 1;
+                            let end = s.find(')').unwrap_or(s.len());
+                            let num_str = &s[start..end];
+                            num_str.parse::<u32>().unwrap_or(255)
+                        } else if s == "Max" {
+                            255
+                        } else {
+                            255
+                        }
+                    }
+                    None => 255,
+                };
+                Ok(SqlDataType::Varchar(length))
+            }
+            DataType::Decimal(_) => {
+                // Treat as unit variant, use default precision and scale
+                Ok(SqlDataType::Decimal(10, 2))
+            }
             DataType::Boolean => Ok(SqlDataType::Boolean),
             DataType::Timestamp(..) => Ok(SqlDataType::Timestamp),
             _ => Err(anyhow!("Unsupported data type: {:?}", data_type)),
@@ -343,7 +364,7 @@ impl SqlEngine {
         Ok(rows)
     }
 
-    fn sort_rows(&self, mut rows: Vec<Row>, _order_by: &[sqlparser::ast::OrderByExpr]) -> Result<Vec<Row>> {
+    fn sort_rows(&self, rows: Vec<Row>, _order_by: &[sqlparser::ast::OrderByExpr]) -> Result<Vec<Row>> {
         // Simplified ORDER BY handling - just return rows as-is for now
         // In a full implementation, this would sort based on the ORDER BY clause
         Ok(rows)

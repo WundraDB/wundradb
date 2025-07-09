@@ -1,0 +1,11 @@
+[package]
+name = "wundradb-server"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+wundradb-core = { path = "../core" }
+tokio = { workspace = true }
+anyhow = { workspace = true }
+tracing = "0.1"
+tracing-subscriber = "0.3"

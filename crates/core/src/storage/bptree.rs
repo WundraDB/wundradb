@@ -50,7 +50,7 @@ impl Node {
     }
 
     fn find_key_index(&self, key: &str) -> usize {
-        self.keys.binary_search(key).unwrap_or_else(|i| i)
+        self.keys.binary_search_by(|k| k.as_str().cmp(key)).unwrap_or_else(|i| i)
     }
 }
 
@@ -278,10 +278,10 @@ impl BPlusTree {
                 for key in &node.keys {
                     if key.starts_with(prefix) {
                         results.push(key.clone());
-                    } else if key > prefix {
-                        // Keys are sorted, so we can stop here
-                        return Ok(results);
-                    }
+                        } else if key.as_str() > prefix {
+                            // Keys are sorted, so we can stop here
+                            return Ok(results);
+                        }
                 }
                 
                 current = node.next_leaf;
