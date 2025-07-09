@@ -3,13 +3,13 @@ use clap::Parser;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpStream;
 use rustyline::Editor;
+use std::io::{stdout, Write};
 
 #[derive(Parser, Debug)]
 #[command(name = "wundradb-cli")]
-#[command(about = "WundraDB Command Line Interface", long_about = None)]
 struct Args {
     /// Host to connect to
-    #[arg(short, long, default_value = "127.0.0.1")]
+    #[arg(short = 'H', long, default_value = "127.0.0.1")]
     host: String,
 
     /// Port to connect to
@@ -29,7 +29,7 @@ async fn main() -> Result<()> {
 
     let mut rl = Editor::<(), _>::new()?;
     loop {
-        let readline = rl.readline("> ");
+        let readline = rl.readline("wundradb> ");
         match readline {
             Ok(line) => {
                 let trimmed = line.trim();
@@ -43,10 +43,13 @@ async fn main() -> Result<()> {
 
                 // Wait for response
                 while let Ok(Some(line)) = lines.next_line().await {
-                    if line == ">" {
+                    if line.trim_start().starts_with("Query OK") || line.trim_start().starts_with("Error") {
+                        print!("{}", line); // use print! for inline prompt
+                        stdout().flush().unwrap(); // ✅ force it to appear immediately
                         break;
+                    } else {
+                        println!("{}", line); // for normal output
                     }
-                    println!("{}", line);
                 }
             }
             Err(_) => {

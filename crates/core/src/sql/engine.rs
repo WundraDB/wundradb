@@ -3,7 +3,7 @@ use crate::txn::wal::{WriteAheadLog, WalEntry, WalOperation};
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use sqlparser::ast::{
-    ColumnDef, DataType, Expr, Ident, Query, SelectItem, SetExpr, Statement, TableFactor, Value,
+    ColumnDef, DataType, Expr, Ident, Query, SelectItem, SetExpr, Statement, TableFactor, Value, ObjectName, ColumnOption, ExactNumberInfo,
 };
 use sqlparser::dialect::GenericDialect;
 use sqlparser::parser::Parser;
@@ -29,8 +29,8 @@ pub struct Column {
 pub enum SqlDataType {
     Integer,
     Varchar(u32),
-    Decimal(u8, u8),
     Boolean,
+    Decimal(u8, u8),
     Timestamp,
 }
 
@@ -89,53 +89,57 @@ impl SqlEngine {
         }
     }
 
-    async fn execute_create_table(
+    pub async fn execute_create_table(
         &self,
-        table_name: &sqlparser::ast::ObjectName,
+        table_name: &ObjectName,
         columns: &[ColumnDef],
     ) -> Result<String> {
         let name = table_name.to_string();
+        println!("[ENGINE] Creating table '{}'", name);
+    
         let mut schema_columns = Vec::new();
-
+    
         for col in columns {
             let column = Column {
                 name: col.name.to_string(),
                 data_type: self.convert_data_type(&col.data_type)?,
-                nullable: col.options.iter().any(|opt| {
-                    matches!(opt.option, sqlparser::ast::ColumnOption::Null)
-                }),
-                primary_key: col.options.iter().any(|opt| {
-                    matches!(opt.option, sqlparser::ast::ColumnOption::Unique { is_primary: true })
-                }),
+                nullable: col.options.iter().any(|opt| matches!(opt.option, ColumnOption::Null)),
+                primary_key: col.options.iter().any(|opt| matches!(opt.option, ColumnOption::Unique { is_primary: true })),
             };
+    
+            println!(
+                " - Column: {}, Type: {:?}, PK: {}, Nullable: {}",
+                column.name, column.data_type, column.primary_key, column.nullable
+            );
+    
             schema_columns.push(column);
         }
-
+    
         let schema = TableSchema {
             name: name.clone(),
             columns: schema_columns,
         };
-
-        // Write to WAL first
+    
+        // ✅ Write to WAL
         let wal_entry = WalEntry {
             id: uuid::Uuid::new_v4(),
             timestamp: chrono::Utc::now(),
             operation: WalOperation::CreateTable(schema.clone()),
         };
-        
+    
         {
             let mut wal = self.wal.write().await;
             wal.append(&wal_entry).await?;
         }
-
-        // Update in-memory schema
+    
+        // ✅ Update in-memory schema
         {
             let mut schemas = self.schemas.write().await;
             schemas.insert(name.clone(), schema);
         }
-
-        Ok(format!("Table '{}' created successfully", name))
-    }
+    
+        Ok(format!("Table '{}' created successfully\n", name))
+    }    
 
     async fn execute_insert(
         &self,
@@ -208,6 +212,17 @@ impl SqlEngine {
     async fn execute_select(&self, query: &Query) -> Result<String> {
         match *query.body {
             SetExpr::Select(ref select) => {
+
+                // Handle simple constant selects like `SELECT 1;` or `SELECT 'hello';`
+                if select.from.is_empty() && select.projection.len() == 1 {
+                    if let SelectItem::UnnamedExpr(expr) = &select.projection[0] {
+                        if let Expr::Value(val) = expr {
+                            let output = format!("?column?\n{}\n(1 row)\n", self.sql_value_to_string(&self.convert_value_to_sql_value(val)?));
+                            return Ok(output);
+                        }
+                    }
+                }
+
                 // Extract table name
                 let table_name = match &select.from.first() {
                     Some(table) => match &table.relation {
@@ -285,34 +300,33 @@ impl SqlEngine {
     fn convert_data_type(&self, data_type: &DataType) -> Result<SqlDataType> {
         match data_type {
             DataType::Int(_) | DataType::Integer(_) => Ok(SqlDataType::Integer),
-            DataType::Varchar(len) => {
-                // len is Option<CharacterLength>
-                let length = match len {
-                    Some(cl) => {
-                        // Use debug string to match variant
-                        let s = format!("{:?}", cl);
-                        if s.starts_with("Bounded") {
-                            // Extract number from Bounded(n)
-                            let start = s.find('(').unwrap_or(0) + 1;
-                            let end = s.find(')').unwrap_or(s.len());
-                            let num_str = &s[start..end];
-                            num_str.parse::<u32>().unwrap_or(255)
-                        } else if s == "Max" {
-                            255
-                        } else {
-                            255
-                        }
-                    }
-                    None => 255,
-                };
-                Ok(SqlDataType::Varchar(length))
+    
+            DataType::Varchar(opt_len) => {
+                let len = opt_len
+                    .as_ref()
+                    .map(|l| l.length)
+                    .unwrap_or(255);
+                Ok(SqlDataType::Varchar(len as u32))
             }
-            DataType::Decimal(_) => {
-                // Treat as unit variant, use default precision and scale
-                Ok(SqlDataType::Decimal(10, 2))
+    
+            DataType::Char(opt_len) => {
+                let len = opt_len
+                    .as_ref()
+                    .map(|l| l.length)
+                    .unwrap_or(255);
+                Ok(SqlDataType::Varchar(len as u32))
             }
+    
             DataType::Boolean => Ok(SqlDataType::Boolean),
+    
+            DataType::Decimal(exact) => match exact {
+                ExactNumberInfo::None => Ok(SqlDataType::Decimal(10, 2)),
+                ExactNumberInfo::Precision(p) => Ok(SqlDataType::Decimal(*p as u8, 0)),
+                ExactNumberInfo::PrecisionAndScale(p, s) => Ok(SqlDataType::Decimal(*p as u8, *s as u8)),
+            },
+    
             DataType::Timestamp(..) => Ok(SqlDataType::Timestamp),
+    
             _ => Err(anyhow!("Unsupported data type: {:?}", data_type)),
         }
     }
