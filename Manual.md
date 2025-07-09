@@ -1,4 +1,4 @@
-# WundraDB Manual
+# WundraDB
 
 WundraDB is a distributed SQL database built in Rust with B+Tree storage, Write-Ahead Logging (WAL), and TCP-based client-server architecture.
 
@@ -18,7 +18,7 @@ cargo build --release --workspace
 ```
 
 #### From GitHub Releases
-Download pre-built binaries from: [GitHub Releases](https://github.com/your-org/wundradb/releases)
+Download pre-built binaries from: [GitHub Releases](https://github.com/WundraDB/wundradb/releases)
 
 Available binaries:
 - `wundradb-server` - Database server
@@ -253,10 +253,10 @@ wundradb/
 
 ## 📞 Support
 
-- GitHub Issues: [Report bugs and request features](https://github.com/your-org/wundradb/issues)
-- Documentation: [Wiki](https://github.com/your-org/wundradb/wiki)
-- Discussions: [Community forum](https://github.com/your-org/wundradb/discussions)
+- GitHub Issues: [Report bugs and request features](https://github.com/WundraDB/wundradb/issues)
+- Documentation: [Wiki](wundradb.netlify.app)
+- Discussions: [Community forum](https://github.com/WundraDB/wundradb/discussions)
 
 ## 📄 License
 
-WundraDB is licensed under the MIT License. See LICENSE file for details.
+WundraDB is licensed under the Apache 2.0 License. See LICENSE file for details.
