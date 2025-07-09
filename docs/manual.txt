@@ -1,0 +1,79 @@
+wundradb-server --port 4000 --data-dir ./data
+
+Example:
+wundradb --host 127.0.0.1 --port 4000
+Welcome to WundraDB!
+wundradb> SELECT * FROM users;
+
+wundradb/
+├── Cargo.toml                     # workspace manifest
+├── crates/
+│   ├── core/                      # Main DB logic (SQL, storage, WAL, planner)
+│   │   ├── Cargo.toml
+│   │   └── src/
+│   │       ├── lib.rs
+│   │       ├── sql/              # SQL parser/integration
+│   │       │   └── engine.rs
+│   │       ├── storage/          # B+Tree + file persistence
+│   │       │   ├── mod.rs
+│   │       │   └── bptree.rs
+│   │       ├── txn/              # Transactions and WAL
+│   │       │   ├── mod.rs
+│   │       │   └── wal.rs
+│   │       └── raft/             # Raft consensus module
+│   │           └── mod.rs
+│   ├── server/                   # Binary to run DB server (TCP interface)
+│   │   ├── Cargo.toml
+│   │   └── src/main.rs
+│   └── cli/                      # Binary CLI (REPL like mysql client)
+│       ├── Cargo.toml
+│       └── src/main.rs
+└── README.md
+
+
+🛠 How to Run & Test
+Build the workspace:
+cargo build --workspace
+Run the server:
+cargo run -p wundradb-server -- --port 4000
+Run the client:
+cargo run -p wundradb -- --host 127.0.0.1
+
+wundradb-server --port 5432 --data-dir ./data
+
+# Terminal SQL shell
+wundradb --url wundradb://localhost:5432
+
+Self build:
+git clone https://github.com/WundraDB/wundradb.git
+cd wundradb
+cargo build --workspace --release
+Run:
+./target/release/wundradb-server --port 4000
+./target/release/wundradb --url wundradb://localhost:4000
+
+[package]
+name = "wundradb"
+version = "0.1.0"
+edition = "2021"
+description = "A distributed SQL database written in Rust"
+license = "Apache-2.0"
+repository = "https://github.com/WundraDB/wundradb"
+
+[dependencies]
+wundradb = { git = "https://github.com/WundraDB/wundradb", tag = "v0.1.0" }
+wundradb-core = { path = "../crate/core" }
+clap = { version = "4", features = ["derive"] } # for CLI parsing
+
+Ambition:
+✅ SQL engine
+✅ B+Tree storage
+✅ WAL (Write-Ahead Log)
+✅ Persistence to disk
+✅ Networking (TCP server + protocol)
+✅ Raft consensus for replication
+
+cd wundradb
+cargo build --workspace
+cargo run -p wundradb-server
+cargo run -p wundradb --url wundradb://localhost:4000

@@ -1,0 +1,22 @@
+[package]
+name = "wundradb-core"
+version = "0.1.0"
+edition = "2021"
+description = "Core database engine for WundraDB"
+authors = ["WundraDB Team"]
+license = "MIT"
+
+[dependencies]
+serde = { workspace = true }
+bincode = { workspace = true }
+sqlparser = { workspace = true }
+tokio = { workspace = true }
+anyhow = { workspace = true }
+uuid = { version = "1.0", features = ["v4"] }
+chrono = { version = "0.4", features = ["serde"] }
+tracing = "0.1"
+thiserror = "1.0"
+
+[dev-dependencies]
+tempfile = "3.0"
+tokio-test = "0.4"
